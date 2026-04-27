@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Banking System | Dashboard</title>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+    --gold: #fbbc05;
+    --dark: #0f172a;
+    --bg: linear-gradient(135deg,#1e293b,#0f172a);
+}
+
+body{
+    font-family:Inter;
+    background:var(--bg);
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    min-height:100vh;
+    margin:0;
+}
+
+.container{
+    background:white;
+    width:420px;
+    padding:40px;
+    border-radius:25px;
+    text-align:center;
+    box-shadow:0 20px 40px rgba(0,0,0,0.4);
+}
+
+.view{display:none;}
+.active{display:block;}
+
+.logo{
+    width:80px;height:80px;
+    margin:auto;
+    background:var(--gold);
+    border-radius:20px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:35px;
+    color:white;
+}
+
+.btn{
+    width:100%;
+    padding:14px;
+    margin-top:10px;
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+    font-weight:600;
+}
+
+.primary{background:var(--dark);color:white;}
+.gold{background:var(--gold);}
+.outline{border:1px solid #ccc;background:none;}
+
+input{
+    width:100%;
+    padding:12px;
+    margin-top:8px;
+    border:1px solid #ddd;
+    border-radius:8px;
+}
+
+#status{
+    margin-top:15px;
+    padding:10px;
+    display:none;
+    background:#f8fafc;
+    border-left:4px solid var(--gold);
+    text-align:left;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div id="status"></div>
+
+<!-- DASH -->
+<div id="dash-view" class="view active">
+
+<div class="logo">🏛</div>
+<h2>Dashboard</h2>
+
+<button class="btn outline" onclick="show('create-view')">Add Account</button>
+<button class="btn outline" onclick="show('deposit-view')">Deposit</button>
+<button class="btn outline" onclick="show('withdraw-view')">Withdraw</button>
+<button class="btn gold" onclick="allAccounts()">Global Ledger</button>
+<button class="btn primary" onclick="logout()">Logout</button>
+
+</div>
+
+<!-- CREATE -->
+<div id="create-view" class="view">
+<h3>Create Account</h3>
+<input id="acno" placeholder="Account No" oninput="validateCreateForm()">
+<input id="name" placeholder="Name" oninput="validateCreateForm()">
+<input id="type" placeholder="Type" oninput="validateCreateForm()">
+<input id="deposit" placeholder="Balance" oninput="validateCreateForm()">
+<button class="btn primary" onclick="submitCreate()" disabled>Register</button>
+<button class="btn outline" onclick="show('dash-view')">Back</button>
+</div>
+
+<!-- DEPOSIT -->
+<div id="deposit-view" class="view">
+<h3>Deposit</h3>
+<input id="dacno" placeholder="Account No">
+<input id="damt" placeholder="Amount">
+<button class="btn gold" onclick="deposit()">Deposit</button>
+<button class="btn outline" onclick="show('dash-view')">Back</button>
+</div>
+
+<!-- WITHDRAW -->
+<div id="withdraw-view" class="view">
+<h3>Withdraw</h3>
+<input id="wacno" placeholder="Account No">
+<input id="wamt" placeholder="Amount">
+<button class="btn gold" onclick="withdraw()">Withdraw</button>
+<button class="btn outline" onclick="show('dash-view')">Back</button>
+</div>
+
+</div>
+
+<script>
+let allData = [];
+let suspendedAccounts = new Set();
+let openMenuId = null;
+
+/* CLOSE MENU ON ANY CLICK */
+document.addEventListener("click", function () {
+    if (openMenuId) {
+        const menu = document.getElementById("menu-" + openMenuId);
+        if (menu) menu.style.display = "none";
+        openMenuId = null;
+    }
+});
+
+/* MENU TOGGLE */
+function toggleMenu(id, event){
+    event.stopPropagation();
+
+    const menu = document.getElementById("menu-"+id);
+
+    if(openMenuId && openMenuId !== id){
+        const prev = document.getElementById("menu-"+openMenuId);
+        if(prev) prev.style.display = "none";
+    }
+
+    if(menu.style.display === "block"){
+        menu.style.display = "none";
+        openMenuId = null;
+    } else {
+        menu.style.display = "block";
+        openMenuId = id;
+    }
+}
+
+/* VIEW */
+function viewDetails(acno){
+    alert("Account Details: " + acno);
+}
+
+/* SUSPEND */
+async function handleSuspend(acno){
+    await fetch("http://localhost:5000/suspend-account", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({acno})
+    });
+
+    suspendedAccounts.add(acno.toString());
+    renderLedger(allData);
+}
+
+/* UNSUSPEND */
+async function handleUnsuspend(acno){
+    await fetch("http://localhost:5000/unsuspend-account", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({acno})
+    });
+
+    suspendedAccounts.delete(acno.toString());
+    renderLedger(allData);
+}
+
+/* NAV */
+function show(id){
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+
+    document.getElementById("status").style.display="none";
+
+    // 🔥 ADD THIS PART
+    if(id === "deposit-view"){
+        document.getElementById("dacno").value = "";
+        document.getElementById("damt").value = "";
+    }
+
+    if(id === "withdraw-view"){
+        document.getElementById("wacno").value = "";
+        document.getElementById("wamt").value = "";
+    }
+
+    if(id === "create-view"){
+        document.getElementById("acno").value = "";
+        document.getElementById("name").value = "";
+        document.getElementById("type").value = "";
+        document.getElementById("deposit").value = "";
+    }
+}
+
+
+/* LOGOUT */
+function logout(){
+    window.location.href="index.html";
+}
+
+/* CREATE */
+async function submitCreate(){
+
+    const btn = document.querySelector("#create-view .btn.primary");
+
+    const oldText = btn.innerText;
+
+    btn.innerText = "Creating...";
+    btn.disabled = true;
+
+    // ✅ take values
+    const acno = document.getElementById("acno").value.trim();
+    const name = document.getElementById("name").value.trim();
+    const type = document.getElementById("type").value.trim();
+    const deposit = document.getElementById("deposit").value.trim();
+
+    // ❌ validation (IMPORTANT)
+    if(!acno || !name || !type || !deposit){
+        alert("Please fill all fields");
+        btn.innerText = oldText;
+        btn.disabled = false;
+        return;
+    }
+
+    try {
+
+        const res = await fetch("http://localhost:5000/create-account",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({
+                acno,
+                name,
+                type,
+                deposit
+            })
+        });
+
+        const text = await res.text();
+
+        if(!res.ok){
+            throw new Error(text);
+        }
+
+        // ✅ SUCCESS UI
+        btn.innerText = "✔ Account Created Successfully";
+        btn.style.background = "green";
+
+        // clear fields
+        document.getElementById("acno").value = "";
+        document.getElementById("name").value = "";
+        document.getElementById("type").value = "";
+        document.getElementById("deposit").value = "";
+
+    } catch(err){
+
+        console.log(err);
+
+        btn.innerText = "❌ Error Creating Account";
+        btn.style.background = "red";
+
+    }
+
+    setTimeout(() => {
+        btn.innerText = oldText;
+        btn.style.background = "";
+        btn.disabled = false;
+    }, 1500);
+}
+function validateCreateForm() {
+    const acno = document.getElementById("acno").value.trim();
+    const name = document.getElementById("name").value.trim();
+    const type = document.getElementById("type").value.trim();
+    const deposit = document.getElementById("deposit").value.trim();
+
+    const btn = document.querySelector("#create-view .btn.primary");
+
+    if (acno && name && type && deposit) {
+        btn.disabled = false;
+        btn.style.opacity = "1";
+        btn.style.cursor = "pointer";
+    } else {
+        btn.disabled = true;
+        btn.style.opacity = "0.5";
+        btn.style.cursor = "not-allowed";
+    }
+}
+
+/* DEPOSIT */
+async function deposit(){
+
+    const btn = document.querySelector("#deposit-view .btn.gold");
+
+    const acno = Number(document.getElementById("dacno").value.trim());
+    const amt = Number(document.getElementById("damt").value.trim());
+
+    if(!acno || !amt){
+        alert("Fill all fields correctly");
+        return;
+    }
+
+    btn.innerText = "Processing...";
+    btn.disabled = true;
+
+    try {
+
+        const res = await fetch("http://localhost:5000/deposit",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({ acno, amt })
+        });
+
+        const text = await res.text();
+
+        if(!res.ok){
+            throw new Error(text);
+        }
+
+        btn.innerText = "Deposit Successful ✔";
+        btn.style.background = "green";
+
+        document.getElementById("dacno").value = "";
+        document.getElementById("damt").value = "";
+
+    } catch(err){
+
+        console.log(err);
+
+        btn.innerText = err.message || "Server Error";
+        btn.style.background = "red";
+
+    }
+
+    setTimeout(() => {
+        btn.innerText = "Deposit";
+        btn.style.background = "";
+        btn.disabled = false;
+    }, 2000);
+}
+/* WITHDRAW */
+async function withdraw(){
+
+    const btn = document.querySelector("#withdraw-view .btn.gold");
+
+    const acno = document.getElementById("wacno").value.trim();
+    const amt = document.getElementById("wamt").value.trim();
+
+    if(!acno || !amt){
+        alert("Fill all fields");
+        return;
+    }
+
+    btn.innerText = "Processing...";
+    btn.disabled = true;
+
+    try {
+
+        const res = await fetch("http://localhost:5000/withdraw",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({ acno, amt })
+        });
+
+        const text = await res.text();
+
+        // ❌ detect HTML error page
+        if (text.startsWith("<!DOCTYPE") || text.includes("<html")) {
+            throw new Error("Server error occurred");
+        }
+
+        if(!res.ok){
+            throw new Error(text);
+        }
+
+        // ✅ SUCCESS
+        btn.innerText = "Withdraw Successful ✔";
+        btn.style.background = "green";
+
+        // clear inputs
+        document.getElementById("wacno").value = "";
+        document.getElementById("wamt").value = "";
+
+    } catch(err){
+
+        console.log(err);
+
+        btn.innerText = err.message || "Withdraw Failed";
+        btn.style.background = "red";
+
+    }
+
+    setTimeout(() => {
+        btn.innerText = "Withdraw";
+        btn.style.background = "";
+        btn.disabled = false;
+    }, 2000);
+}
+
+/* ALL ACCOUNTS */
+async function allAccounts() {
+
+    const res = await fetch("http://localhost:5000/all-accounts");
+    allData = await res.json();
+
+    // hide dashboard view properly
+    document.getElementById("dash-view").classList.remove("active");
+
+    renderLedger(allData);
+}
+
+/* RENDER LEDGER */
+function renderLedger(data){
+
+
+let out = `
+<div style="text-align:left;">
+
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;">
+
+    <h2 style="margin:0;">🏦 Global Ledger</h2>
+
+    <button onclick="show('dash-view')"
+        style="padding:8px 12px;border:none;background:#0f172a;color:white;border-radius:8px;cursor:pointer;">
+        ← Back
+    </button>
+
+</div>
+
+<!-- SEARCH BAR -->
+<div style="display:flex;gap:8px;margin-top:10px;margin-bottom:10px;">
+
+    <input id="filterInput"
+        placeholder="Search Account..."
+        value="${document.getElementById('filterInput')?.value || ''}"
+        oninput="filterAccounts()"
+        style="
+            flex:1;
+            padding:10px;
+            border:1px solid #ddd;
+            border-radius:10px;
+            outline:none;
+        "
+    >
+
+    <button onclick="filterAccounts()"
+        style="
+            padding:10px 14px;
+            border:none;
+            background:#0f172a;
+            color:white;
+            border-radius:10px;
+            cursor:pointer;
+        ">
+        Search
+    </button>
+
+</div>
+`;
+
+/* ===================== ACCOUNTS LIST ===================== */
+
+data.forEach(acc => {
+
+out += `
+<div style="
+    background:white;
+    padding:18px;
+    margin-top:12px;
+    border-radius:14px;
+    border-left:5px solid #fbbc05;
+    position:relative;
+    box-shadow:0 4px 12px rgba(0,0,0,0.08);
+">
+
+    <!-- 3 DOT -->
+    <div onclick="toggleMenu('${acc.account_no}',event)"
+        style="position:absolute;top:10px;right:10px;cursor:pointer;font-size:20px;">
+        ⋮
+    </div>
+
+    <!-- MENU -->
+    <div id="menu-${acc.account_no}" style="
+        display:none;
+        position:absolute;
+        top:35px;
+        right:10px;
+        background:white;
+        border:1px solid #ddd;
+        border-radius:10px;
+        width:160px;
+        z-index:10;
+    ">
+
+        <div onclick="viewDetails('${acc.account_no}')"
+            style="padding:10px;border-bottom:1px solid #eee;">
+            👤 Personal
+        </div>
+
+        ${
+            suspendedAccounts.has(acc.account_no.toString())
+            ? `<div onclick="handleUnsuspend('${acc.account_no}')" style="padding:10px;color:green;">
+                🔄 Unsuspend
+               </div>`
+            : `<div onclick="handleSuspend('${acc.account_no}')" style="padding:10px;color:red;">
+                ⛔ Suspend
+               </div>`
+        }
+
+    </div>
+
+    <!-- ACCOUNT DETAILS -->
+    <div style="font-weight:600;font-size:15px;">
+        ${acc.account_no}
+        ${
+            suspendedAccounts.has(acc.account_no.toString())
+            ? `<span style="color:red;font-size:12px;margin-left:6px;">(SUSPENDED)</span>`
+            : ""
+        }
+    </div>
+
+    <div>Name: ${acc.name}</div>
+    <div>Type: ${acc.type}</div>
+    <div>Balance: ₹ ${acc.balance}</div>
+
+</div>
+`;
+
+});
+
+out += `</div>`;
+
+/* render */
+document.getElementById("status").style.display = "block";
+document.getElementById("status").innerHTML = out;
+}
+</script>
+<script src="clock.js"></script>
+</body>
+</html>
