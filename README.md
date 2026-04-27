@@ -47,13 +47,9 @@ BankingSystem/
    node app.js
 3. Open in browser:
    http://localhost:3000
-   
-
-📸 Screenshots
-![Uploading image.png…]()
 
 
-*(Add screenshots here if possible — improves your resume impact)*
+
 
 
 
